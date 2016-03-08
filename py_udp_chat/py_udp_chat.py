@@ -10,7 +10,7 @@ class Peer:
         self.group = group
         #for joininig and unjoining to the group
         self.mreq = b''
-        self.net_interface = getaddrinfo(gethostname(),'http',AF_INET)[0][4][0]
+        self.net_interface = getaddrinfo(gethostname(),'http',AF_INET,SOCK_DGRAM,IPPROTO_UDP)[0][4][0]
         self.sock = socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP)
         self.__join_group(self.sock)
         self.sock.bind((self.net_interface,port))
@@ -22,7 +22,7 @@ class Peer:
         sock.setsockopt(SOL_IP,IP_ADD_MEMBERSHIP,self.mreq)
         sock.setsockopt(SOL_SOCKET,SO_REUSEADDR,1)
         #default
-        #self.sock.setsockopt(IPPROTO_IP,IP_MULTICAST_TTL,struct.pack('B',1))
+        self.sock.setsockopt(IPPROTO_IP,IP_MULTICAST_TTL,struct.pack('B',1))
 
     def __unjoin_group(self,sock):
         self.sock.setsockopt(SOL_IP,IP_DROP_MEMBERSHIP,self.mreq)
