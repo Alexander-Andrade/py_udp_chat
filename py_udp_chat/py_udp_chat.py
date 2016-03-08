@@ -10,10 +10,10 @@ class Peer:
         self.group = group
         #for joininig and unjoining to the group
         self.mreq = b''
-        self.net_interface = first_private_network_interface()
+        self.net_interface = Peer.first_private_network_interface()
         self.sock = socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP)
-        self.__join_group(self.sock)
         self.sock.bind((self.net_interface,port))
+        self.__join_group(self.sock)
         #join group
        
     @staticmethod
@@ -25,19 +25,20 @@ class Peer:
 
     def __join_group(self,sock):
         self.mreq = inet_aton(self.group) + inet_aton(self.net_interface)
-        sock.setsockopt(SOL_IP,IP_ADD_MEMBERSHIP,self.mreq)
-        sock.setsockopt(SOL_SOCKET,SO_REUSEADDR,1)
+        struct.pack('4sL',inet_aton(self.group),inet_aton(self.net_interface))
+        sock.setsockopt(IPPROTO_IP,IP_ADD_MEMBERSHIP,self.mreq)
+        #sock.setsockopt(SOL_SOCKET,SO_REUSEADDR,1)
         #default
-        self.sock.setsockopt(IPPROTO_IP,IP_MULTICAST_TTL,struct.pack('B',1))
+        self.sock.setsockopt(IPPROTO_IP,IP_MULTICAST_TTL,struct.pack('b',1))
 
     def __unjoin_group(self,sock):
         self.sock.setsockopt(SOL_IP,IP_DROP_MEMBERSHIP,self.mreq)
 
     def group_send(self,msg):
-        self.sock.sendto(msg,0,(self.group,self.port))
+        self.sock.sendto(msg,(self.group,self.port))
 
     def send(self,msg,addr):
-        self.sock.sendto(msg,0,addr)
+        self.sock.sendto(msg,addr)
 
     def recv(self,num):
         return self.sock.recvfrom(num)
