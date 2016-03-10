@@ -1,6 +1,12 @@
 from socket import*
 import sys
 import struct
+import time
+import sched
+from threading import*
+import random
+from packet import*
+
 
 def setSendTimeout(sock,timeOutSec):
     if sys.platform.startswith('win'):
@@ -61,12 +67,16 @@ class Peer:
         self.sock.close()
 
 if __name__=='__main__':
-    
+    '''
     peer = Peer('224.3.29.71',6000)
     print(peer.recv(1024))
     del peer
+    '''
+    '''
+    random.seed()
+    for i in range(10):
+        print(random.uniform(0.0,10.0))
+    '''
+
+   
     
-    '''
-    sock = socket(AF_INET,SOCK_DGRAM)
-    sock.sendto(b'hello',('192.168.1.3',6000))
-    '''

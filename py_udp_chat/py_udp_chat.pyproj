@@ -22,6 +22,9 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="packet.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="py_udp_chat.py" />
   </ItemGroup>
   <PropertyGroup>
