@@ -8,17 +8,17 @@ import random
 from packet import*
 
 
-def setSendTimeout(sock,timeOutSec):
+def enabsock_recv_timeout(self,timeOutSec):
     if sys.platform.startswith('win'):
         timeval = timeOutSec * 1000
     elif sys.platform.startswith('linux'):
-        sock.setsockopt(SOL_SOCKET, SO_SNDTIMEO, struct.pack("LL", timeOutSec, 0))
+        sock.setsockopt(SOL_SOCKET, SO_RCVTIMEO, struct.pack("LL", timeOutSec, 0))
 
-def disableSendTimeout(sock):
+def disabsock_recv_timeout(self):
     if sys.platform.startswith('win'):
         timeval = 0
     elif sys.platform.startswith('linux'):
-        sock.setsockopt(SOL_SOCKET, SO_SNDTIMEO, struct.pack("LL",0,0))
+        sock.setsockopt(SOL_SOCKET, SO_RCVTIMEO, struct.pack("LL",0,0))
 
 
 class Peer:
@@ -30,10 +30,13 @@ class Peer:
         #for joininig and unjoining to the group
         self.mreq = b''
         self.net_interface = Peer.first_private_network_interface()
-        self.sock = socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP)
-        self.sock.bind((self.net_interface,port))
-        self.__join_group(self.sock)
-        #join group
+        self.group_sock = socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP)
+        self.group_sock.bind((self.net_interface,port))
+        self.send_sock = socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP)
+        self.__join_group(self.group_sock)
+        self.peers = set()
+        self.n_attempts = 3
+        self.timeout = 10
        
     @staticmethod
     def first_private_network_interface():
@@ -61,6 +64,19 @@ class Peer:
 
     def recv(self,num):
         return self.sock.recvfrom(num)
+
+    def identify_peers(self, nickname):
+        self.nickname = nickname
+        #send multicast Identification packet with nickname? chosen by you  
+        ident_pack = Packet(tos=MsgTOS.Identification,data=self.nickname)  
+        ident_pack.pack()
+        #initiat timeout = 2 sec, then growing exponentially
+        time_out = 2 
+        for i in range(self.n_attempts):
+            self.send_sock.sendto(ident_pack.packet, (self.group,self.port))
+            self.group_sock.timeout(time_out)
+            self.group_sock.recvfrom(1024)
+                
 
     def __del__(self):
         self.__unjoin_group(self.sock)
