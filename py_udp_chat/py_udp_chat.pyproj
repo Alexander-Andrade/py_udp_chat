@@ -22,9 +22,15 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="packet.py">
+    <Compile Include="Frame.py" />
+    <Compile Include="FrameType.py" />
+    <Compile Include="func_algorithms.py" />
+    <Compile Include="PeerInfo.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="PeerModel.py" />
+    <Compile Include="MixedSocket.py" />
+    <Compile Include="net_interface.py" />
     <Compile Include="py_udp_chat.py" />
   </ItemGroup>
   <PropertyGroup>
