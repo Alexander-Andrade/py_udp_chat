@@ -1,10 +1,8 @@
-import pickle
-from Frame import Frame
-from FrameType import FrameType
-from Peer import*
+import sys
+from PeerModel import PeerModel
 
 
 if __name__ == '__main__':
-    for i in range(30):
-        print(random_port('H',6000))
+   peer_model = PeerModel(sys.argv[1], sys.argv[2]) 
+   peer_model.check_nickname('rufus')
     

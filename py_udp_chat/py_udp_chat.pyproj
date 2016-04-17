@@ -12,6 +12,9 @@
     <OutputPath>.</OutputPath>
     <Name>py_udp_chat</Name>
     <RootNamespace>py_udp_chat</RootNamespace>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <CommandLineArguments>224.0.0.1 6000</CommandLineArguments>
+    <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
