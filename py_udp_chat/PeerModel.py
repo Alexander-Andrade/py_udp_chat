@@ -9,9 +9,7 @@ from net_interface import*
 from MixedSocket import MixedSocket
 from Frame import Frame
 from PeerInfo import PeerInfo
-                                            
-def random_port(str_num_type,min=0):
-    return random.randrange(min, 2 << (int(struct.calcsize(str_num_type)*8 - 1)))
+
 
 class PeerModel:
 
@@ -21,45 +19,76 @@ class PeerModel:
         self.group_addr = (self.group, self.group_port)
         self.interf_ip = interface_ip()
         self.group_sock = MixedSocket(AF_INET,SOCK_DGRAM,IPPROTO_UDP)
-        #can listen a busy port 
-        self.group_sock.setsockopt(SOL_SOCKET,SO_REUSEADDR,1)
-        self.group_sock.bind((self.interf_ip,self.group_port))
-        self.group_sock.join_group(self.group, self.interf_ip)
-        self.group_sock.disab_multicast_loop()
-        self.priv_port = random_port('H',self.group_port)
+        self.__group_sock_config()
         self.private_sock = MixedSocket(AF_INET,SOCK_DGRAM,IPPROTO_UDP)
-        self.priv_addr = (self.interf_ip, self.priv_port)
-        self.private_sock.bind(self.priv_addr)
+        self.__private_sock_config()
         #view collback on message come event
-        self.target = kwargs.get('target')
+        self.on_message_come_callback = kwargs.get('on_message_come')
+        self.on_peerlist_update_callback = kwargs.get('on_peerlist_update')
         #key = nickname,  value = private address of peers
         self.peer_addrs = dict()
         #key = nickname, value = history, online mark
         self.peers_info = dict()
+        self.responded_peers = set()
+        self.resp_peers_lock = threading.Lock()
         #time to wait reply from peer
         self.reply_time = 3
         self.n_send_attempts = 3
+        self.lighthouse_honks_span = kwargs.get('lighthouse_honks_span', 7)
+        self.peer_live_check_span = kwargs.get('peer_live_check_span', 10)
         self.actions = {FrameType.Data : self.handle_data,
                         FrameType.GreetingRequest : self.handle_greeting_reguest,
                         FrameType.GreetingReply : self.handle_greeting_reply,
                         FrameType.Leaving : self.handle_leaving,
                         FrameType.LifeCheckRequest : self.handle_live_check_request, 
-                        FrameType.LifeCheckReply : self.handle_live_check_reply} 
+                        FrameType.Alive : self.handle_alive_reply} 
                         
         #self.stop_sending_thread_event = threading.Event()  
         #self.frame_sending_thread = threading.Thread(target=self.frame_sending_routine,args=(self.stop_sending_thread_event,))
-        self.priv_port_thread = threading.Thread(target=self.)
-        self.group_port_thread = threading.Thread()
+        self.priv_sock_thread = threading.Thread(target=self.sock_routine)
+        self.group_sock_thread = threading.Thread(target=self.sock_routine)
+        self.lighthouse_thread = threading.Thread(target=self.lighthouse_honk_routine)
+        self.peer_alive_check_thread = threading.Thread(target=self.peer_alive_check_routine)
 
-    def get_priv_port(self, self.target)
+    def __group_sock_config(self):
+        #can listen a busy port 
+        self.group_sock.setsockopt(SOL_SOCKET,SO_REUSEADDR,1)
+        self.group_sock.bind((self.interf_ip,self.group_port))
+        self.group_sock.join_group(self.group, self.interf_ip)
+        self.group_sock.disab_multicast_loop()
+
+    def __private_sock_config(self):
+        #let to chose free port
+        self.private_sock.bind((self.interf_ip, 0))
+        self.priv_addr = self.private_sock.getsockname()
+        self.priv_port = self.priv_addr[1]
+
+  
+    def peer_alive_check_routine(self):
+        while True:
+            self.resp_peers_lock.acquire()
+            self.peer_addrs = [peer for peer in self.peer_addrs if peer in self.responded_peers]   
+            self.on_peerlist_update_callback(self.peer_addrs, self.peers_info)
+            self.resp_peers_lock.release()
+            time.sleep(self.peer_live_check_span)
+            
+    def sock_routine(self):
+        while True:
+            frame,addr = self.private_sock.recv_frame_from()
+            self.resp_peers_lock.acquire()
+            self.responded_peers.add(addr)
+            self.resp_peers_lock.release()
+            self.actions[frame.type](frame) 
 
 
-    def send_frame_togroup(self,sock,**kwargs):
-        sock.send_frame_to(Frame(src_port=self.priv_port, **kwargs), self.group)
+    def lighthouse_honk_routine(self):
+        while True:
+            self.group_sock.send_frame_to(Frame(type=FrameType.Alive), self.group_addr)
+            time.sleep(self.lighthouse_honks_span)
 
     def handle_data(self, frame):
-        #skip data
-        pass
+        #transfer data to view
+        self.on_message_come_callback(frame.data)
 
     def reg_unknown_peer(self,peer):
         if peer not in self.peers:
@@ -74,7 +103,7 @@ class PeerModel:
     def handle_live_check_request(self):
         pass
 
-    def handle_live_check_reply(self):
+    def handle_alive_reply(self):
         pass
 
     def handle_greeting_reguest(self, frame):
@@ -91,7 +120,7 @@ class PeerModel:
             self.group_sock.recv_frame_from(type=FrameType.GreetingReply)
         except OSError as e:
             #this host is first-> send peers-list to the private peer socket (frame.data contains private peer socket)
-            self.group_sock.send_frame_to(Frame(dst_addr=peer, src_addr=self.host_as_peer, type=FrameType.GreetingReply, data=self.peers+[self.host_as_peer]),(self.group,self.group_port))
+            self.group_sock.send_frame_to(Frame(dst_addr=peer, src_addr=self.host_as_peer, type=FrameType.GreetingReply, data=self.peers+[self.host_as_peer]),self.group_addr)
         finally:
             self.group_sock.settimeout(None)
         self.resume_sending_thread()
@@ -122,7 +151,7 @@ class PeerModel:
     def check_nickname(self,nickname):
         attempts = 0
         while attempts < self.n_send_attempts:
-           self.private_sock.send_frame_to(Frame(src_port=self.priv_port, type=FrameType.GreetingRequest, data=nickname), self.group_addr)
+           self.private_sock.send_frame_to(Frame(type=FrameType.GreetingRequest, data=nickname), self.group_addr)
            #waiting peer list
            self.group_sock.settimeout(self.reply_time)
            try:
@@ -141,6 +170,11 @@ class PeerModel:
         return "" # alone peer or/and correct nickname
 
 
+    def join_group(self):
+        self.priv_sock_thread.start()
+        self.group_sock_thread.start()
+        self.lighthouse_thread.start()
+        self.peer_alive_check_thread.start()
 
 
-
+                                     

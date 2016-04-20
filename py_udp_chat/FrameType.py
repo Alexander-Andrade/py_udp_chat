@@ -7,4 +7,4 @@ class FrameType(Enum):
     GreetingReply = 2
     Leaving = 3
     LifeCheckRequest = 4
-    LifeCheckReply = 5
+    Alive = 5
