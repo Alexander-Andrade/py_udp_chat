@@ -25,12 +25,11 @@ class PeerModel:
         #view collback on message come event
         self.on_message_come_callback = kwargs.get('on_message_come')
         self.on_peerlist_update_callback = kwargs.get('on_peerlist_update')
-        #key = nickname,  value = private address of peers
-        self.peer_addrs = dict()
-        #key = nickname, value = history, online mark
-        self.peers_info = dict()
+        self.nickname = ''
+        self.peers = dict()
         self.responded_peers = set()
         self.resp_peers_lock = threading.Lock()
+        self.peers_lock = threading.Lock()
         #time to wait reply from peer
         self.reply_time = 3
         self.n_send_attempts = 3
@@ -38,7 +37,6 @@ class PeerModel:
         self.peer_live_check_span = kwargs.get('peer_live_check_span', 10)
         self.actions = {FrameType.Data : self.handle_data,
                         FrameType.GreetingRequest : self.handle_greeting_reguest,
-                        FrameType.GreetingReply : self.handle_greeting_reply,
                         FrameType.Leaving : self.handle_leaving,
                         FrameType.LifeCheckRequest : self.handle_live_check_request, 
                         FrameType.Alive : self.handle_alive_reply} 
@@ -66,10 +64,15 @@ class PeerModel:
   
     def peer_alive_check_routine(self):
         while True:
-            self.resp_peers_lock.acquire()
-            self.peer_addrs = [peer for peer in self.peer_addrs if peer in self.responded_peers]   
-            self.on_peerlist_update_callback(self.peer_addrs, self.peers_info)
-            self.resp_peers_lock.release()
+            print('peer check pending...')
+            if set(self.peers.keys()) != self.responded_peers:
+                self.peers_lock.acquire()
+                self.peers = dict(peer for peer in self.peers if peer[0] in self.responded_peers)   
+                self.peers_lock.release()
+                self.on_peerlist_update_callback(self.peers)
+                self.resp_peers_lock.acquire()
+                self.responded_peers.clear()
+                self.resp_peers_lock.release()
             time.sleep(self.peer_live_check_span)
             
     def sock_routine(self):
@@ -78,97 +81,77 @@ class PeerModel:
             self.resp_peers_lock.acquire()
             self.responded_peers.add(addr)
             self.resp_peers_lock.release()
-            self.actions[frame.type](frame) 
+            self.actions[frame.type](frame, addr) 
 
+    def registrate_new_peer(self, frame, addr):
+        nickname = frame.data
+        self.peers[addr] = nickname
 
     def lighthouse_honk_routine(self):
         while True:
             self.group_sock.send_frame_to(Frame(type=FrameType.Alive), self.group_addr)
             time.sleep(self.lighthouse_honks_span)
 
-    def handle_data(self, frame):
-        #transfer data to view
-        self.on_message_come_callback(frame.data)
+    def handle_data(self, frame, addr):
+        nickname = self.peers.get(addr)
+        self.on_message_come_callback(frame.data, addr, nickname)
 
-    def reg_unknown_peer(self,peer):
-        if peer not in self.peers:
-            self.peers.append(peer)
-    
-    def stop_sending_thread(self):
-        self.stop_sending_thread_event.clear()
-
-    def resume_sending_thread(self):
-        self.stop_sending_thread_event.set()
-
-    def handle_live_check_request(self):
+    def handle_live_check_request(self, frame, addr):
         pass
 
-    def handle_alive_reply(self):
+    def handle_alive_reply(self, frame, addr):
         pass
 
-    def handle_greeting_reguest(self, frame):
-        #stop sending data, it overflows udp receive buffer
-        self.stop_sending_thread()
-        peer = frame.src_addr
-        self.reg_unknown_peer(peer)
+    def handle_greeting_reguest(self, frame, addr):
+        self.registrate_new_peer(frame, addr)
         #send self peer-list as greeting reply
         #set timeout and listen bus, if enother peer managed first
-        reply_after_delay = random.uniform(0, self.max_greeting_reply_time)   
+        reply_after_delay = random.uniform(0, self.reply_time)   
         #listen bus with timeout
         self.group_sock.settimeout(reply_after_delay)
         try:
             self.group_sock.recv_frame_from(type=FrameType.GreetingReply)
         except OSError as e:
-            #this host is first-> send peers-list to the private peer socket (frame.data contains private peer socket)
-            self.group_sock.send_frame_to(Frame(dst_addr=peer, src_addr=self.host_as_peer, type=FrameType.GreetingReply, data=self.peers+[self.host_as_peer]),self.group_addr)
+            peers_with_itself = self.peers.copy()
+            peers_with_itself.update({self.priv_addr : self.nick})
+            self.group_sock.send_frame_to(Frame(type=FrameType.GreetingReply, data=peers_with_itself), self.group_addr)
         finally:
             self.group_sock.settimeout(None)
-        self.resume_sending_thread()
+        
 
-    def handle_greeting_reply(self, frame):
-        #get peers-list from other peer 
-        self.peers.extend( frame.data )
-        #remove self from peer-list
-        self.peers.remove(self.host_as_peer)
-        #began sending to peers 
-        self.resume_sending_thread()
+    def handle_leaving(self, frame, addr):
+        self.peers_lock.acquire()
+        self.peers.pop(addr, None)
+        self.peera_lock.release()
+        self.on_peerlist_update_callback(self.peers)
 
-
-    def handle_leaving(self, frame):
-        if peer in self.peers:
-            self.peers.remove(frame.src_addr)
-
-         
-    def am_i_recepient(self, frame):
-        pass
-
-    def offer_new_nickname(self, old_nickname):
-        new_nickname = old_nickname
-        while self.peer_addrs.get(new_nickname):
-           new_nickname += "0"
-        return new_nickname 
-
-    def check_nickname(self,nickname):
+    def set_nickname(self, chose_nickname_dial_callback):
+        self.peers = self.get_peers_dict()
+        nicknames= list(self.peers.values())
+        proposed_nickname = ''
+        while True:
+            chosen_nickname = chose_nickname_dial_callback(proposed_nickname)
+            if chosen_nickname in nicknames:     
+                proposed_nickname = chosen_nickname + '0'
+            else:
+                self.nickname = chosen_nickname
+                break
+           
+    def get_peers_dict(self):
         attempts = 0
         while attempts < self.n_send_attempts:
            self.private_sock.send_frame_to(Frame(type=FrameType.GreetingRequest, data=nickname), self.group_addr)
            #waiting peer list
            self.group_sock.settimeout(self.reply_time)
            try:
-               frame, priv_src_addr = self.group_sock.recv_frame_from()
+               frame, addr = self.group_sock.recv_frame_from(type=FrameType.GreetingReply)
                #success
-               self.peer_addrs = frame.data
-               if self.peer_addrs.get(nickname):
-                   #nickname is not unique, may change it
-                   #to offer new nickname
-                   return self.offer_new_nickname(nickname)
-               break
+               return frame.data
            except OSError as e:
                attempts += 1
            finally:
                self.group_sock.settimeout(None)
-        return "" # alone peer or/and correct nickname
-
+        return dict()
 
     def join_group(self):
         self.priv_sock_thread.start()
