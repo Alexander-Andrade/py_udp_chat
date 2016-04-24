@@ -43,7 +43,8 @@ class PeerModel:
                         FrameType.Leaving : self.handle_leaving,
                         FrameType.LifeCheckRequest : self.handle_live_check_request, 
                         FrameType.Alive : self.handle_alive_reply} 
-                        
+        #for the threads
+        self.close_fl = False                
         #self.stop_sending_thread_event = threading.Event()  
         #self.frame_sending_thread = threading.Thread(target=self.frame_sending_routine,args=(self.stop_sending_thread_event,))
         self.priv_sock_thread = threading.Thread(target=self.sock_routine, args=(self.private_sock,))
@@ -99,6 +100,8 @@ class PeerModel:
                 self.__safely_update_peerlist()
             with self.resp_peers_lock:
                 self.responded_peers.clear()
+            if self.close_fl:
+                break
            
             
     def isFrameFilteredByAddr(self, addr, frame):
@@ -113,12 +116,16 @@ class PeerModel:
                 print('{} -> {}'.format(addr, frame))
                 with self.resp_peers_lock:
                     self.responded_peers.add(addr)
-                self.actions[frame.type](frame, addr) 
+                self.actions[frame.type](frame, addr)
+            if self.close_fl:
+                break 
 
     def lighthouse_honk_routine(self):
         while True:
             self.private_sock.send_frame_to(Frame(type=FrameType.Alive), self.group_addr, lock_fl=True)
             time.sleep(self.lighthouse_honks_span)
+            if self.close_fl:
+                break
 
 
 
@@ -204,10 +211,17 @@ class PeerModel:
                 return addr
 
     def send_message(self, message, nickname):
-        addr = self.__find_peeraddr_by_nick(nickname) if nickname else self.group_addr
+        addr = self.__find_peeraddr_by_nick(nickname) if nickname != 'group' else self.group_addr
         self.private_sock.send_frame_to(Frame(type=FrameType.Data, data=message), addr, lock_fl=True)
-
-
+    
+    def close(self):
+        self.close_fl = True
+        self.private_sock.send_frame_to(Frame(type=FrameType.Leaving), self.group_addr, lock_fl=True)
+        self.private_sock.send_frame_to(Frame(type=FrameType.Leaving), self.priv_addr, lock_fl=True)
+        self.priv_sock_thread.join()
+        self.group_sock_thread.join()
+        self.lighthouse_thread.join()
+        self.peer_alive_check_thread.join()
 
     def join_group(self):
         self.priv_sock_thread.start()

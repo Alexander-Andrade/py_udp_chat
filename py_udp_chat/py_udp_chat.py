@@ -3,6 +3,7 @@ from tkinter import*
 import tkinter.ttk as ttk    #ovveride tkinter widgets
 from PeerModel import PeerModel
 from PeerView import PeerView, NicknameDial
+from PeerInfo import PeerInfo
 
 def on_msg_come(frame, addr, nickname):
     print(frame)
