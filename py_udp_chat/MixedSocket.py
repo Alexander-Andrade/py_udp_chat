@@ -3,12 +3,14 @@ import struct
 import pickle
 from Frame import Frame
 import sys
+import threading
 
 class MixedSocket(socket):
 
     def __init__(self,family=AF_INET, type=SOCK_STREAM, proto=0, fileno=None,**kwargs):
         super().__init__(family, type, proto, fileno, **kwargs)
         self.max_msg_size = self.get_recv_bufsize()
+        self.lock = threading.RLock()
       
     def join_group(self,group_addr,interf_addr,multicast_scope=1):
         #self.mreq = struct.pack('4sl',inet_aton(group_addr),INADDR_ANY) if interf_addr==INADDR_ANY else struct.pack('4s4s',inet_aton(group_addr),inet_aton(interf_addr)) 
@@ -83,18 +85,26 @@ class MixedSocket(socket):
         serialized_obj=self.recvfrom_with_discarding(addr,obj_len)
         return pickle.loads(serialized_obj)
     
-    def send_frame_to(self,frame,addr):
+    def send_frame_to(self,frame,addr,lock_fl=False):
+        print('{} <- {}'.format(addr, frame))
         bytes_frame = bytes(frame)
-        self.sendto(bytes_frame,addr) 
+        with self.lock : self.sendto(bytes_frame, addr) if lock_fl else self.sendto(bytes_frame, addr)
+                 
 
     def recv_frame_from(self,**hints):
         type=hints.get('type')
         while True:
-            bytes_frame,addr=self.recvfrom(self.max_msg_size)
-            frame = Frame(frame=bytes_frame)
-            if type is None:
-                return (frame, addr)
-            elif type  and type != frame.type: continue
+            try:
+                bytes_frame, addr=self.recvfrom(self.max_msg_size)
+                #bytes_frame, addr=self.recvfrom(self.max_msg_size)
+                frame = Frame(frame=bytes_frame)
+                #print("{} : {}".format(addr, frame), flush=True)
+                if type is None or type == frame.type:
+                    return (frame, addr)
+            # not filter timeout errors
+            except (herror, gaierror) as e:
+                print(e)
+                
 
             
 

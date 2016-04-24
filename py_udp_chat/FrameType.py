@@ -5,6 +5,7 @@ class FrameType(Enum):
     Data = 0
     GreetingRequest = 1
     GreetingReply = 2
-    Leaving = 3
-    LifeCheckRequest = 4
-    Alive = 5
+    Nickname = 3
+    Leaving = 4
+    LifeCheckRequest = 5
+    Alive = 6

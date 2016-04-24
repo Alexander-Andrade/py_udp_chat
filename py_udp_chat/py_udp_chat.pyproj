@@ -34,6 +34,9 @@
     <Compile Include="PeerModel.py" />
     <Compile Include="MixedSocket.py" />
     <Compile Include="net_interface.py" />
+    <Compile Include="PeerView.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="py_udp_chat.py" />
   </ItemGroup>
   <PropertyGroup>
