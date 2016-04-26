@@ -13,7 +13,6 @@ class MixedSocket(socket):
         self.lock = threading.RLock()
       
     def join_group(self,group_addr,interf_addr,multicast_scope=1):
-        #self.mreq = struct.pack('4sl',inet_aton(group_addr),INADDR_ANY) if interf_addr==INADDR_ANY else struct.pack('4s4s',inet_aton(group_addr),inet_aton(interf_addr)) 
         self.mreq = struct.pack('4s4s',inet_aton(group_addr),inet_aton(interf_addr))
         self.setsockopt(IPPROTO_IP,IP_ADD_MEMBERSHIP,self.mreq)
         #default                                                        

@@ -128,41 +128,25 @@ class PeerView(ttk.Frame):
         except IndexError as e:
             pass
       
-    '''
-    def del_peer_from_listview(self,peer_nick):
-        for item in self.peers_listview.get_children():
-            if(self.peers_listview.item(item, 'values')[0] == peer_nick):
-                self.peers_listview.delete(item)
-                self.peers_listview.update()
-                break
-    '''
     def on_msg_send(self):
         msg = self.get_sending_string()
-        self.clr_msg_text()
-        #save msg to history
-        self.peers_dict[self.selected_peer_nick].history += '{} <- {}'.format(self.selected_peer_nick, msg) 
-        self.replace_history(self.peers_dict[self.selected_peer_nick].history)
-        self.peer_model.send_message(msg, self.selected_peer_nick)
+        if msg != '\n' and msg != '': #if not empty string
+            self.clr_msg_text()
+            #save msg to history
+            self.peers_dict[self.selected_peer_nick].history += '{} <- {}'.format(self.selected_peer_nick, msg) 
+            self.replace_history(self.peers_dict[self.selected_peer_nick].history)
+            self.peer_model.send_message(msg, self.selected_peer_nick)
 
     def on_msg_come(self, message, nickname):
         nick = nickname if nickname else 'group'
-        self.peers_dict[nick].history += '{} -> {}'.format(nick, message)
-        self.update_history(message)
+        msg_record = '{} -> {}'.format(nick, message) 
+        self.peers_dict[nick].history += msg_record
+        self.update_history(msg_record)
 
     def __clear_listview(self):
         #tree.delete(*tree.get_children())
         for peer in self.peers_listview.get_children():
             self.peers_listview.delete(peer)    
-
-    def __update_peers_listview(self, new_nicknames):
-        for item in self.peers_listview.get_children():
-            view_peer_info = self.peers_listview.item(item, 'values')
-            #is online col
-            online_str = 'online' if self.peers_dict[view_peer_info[0]] == True else 'offline'
-            self.peers_listview.item(item)['values'] = (view_peer_info[0], online_str)
-        for new_nick in new_nicknames:
-            self.peers_listview.insert('','end',values=(new_nick,'online'))
-        self.peers_listview.update()
 
     def __fill_listview(self):
         for peer_nick, peer_info in self.peers_dict.items():
@@ -188,4 +172,3 @@ class PeerView(ttk.Frame):
         new_nicknames = nicknames_online.difference(peers_nicks)
         self.__update_peers_dict(nicknames_online, new_nicknames)
         self.__refresh_listview()
-        #self.__update_peers_listview(new_nicknames)

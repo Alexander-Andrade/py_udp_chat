@@ -95,9 +95,10 @@ class PeerModel:
                 self.__force_to_live_sygnals(silent_peers_addrs)
                 time.sleep(self.reply_time)
                 silent_peers_addrs = self.__safely_find_silent_peers(peers_addrs)
-                print('{} leaved silently'.format(silent_peers_addrs))
-                self.__safely_del_silent_peers(silent_peers_addrs)
-                self.__safely_update_peerlist()
+                if silent_peers_addrs:
+                    print('{} leaved silently'.format(silent_peers_addrs))
+                    self.__safely_del_silent_peers(silent_peers_addrs)
+                    self.__safely_update_peerlist()
             with self.resp_peers_lock:
                 self.responded_peers.clear()
             if self.close_fl:
